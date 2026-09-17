@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Smart Sign | Traffic Sign Recognition</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #050b12;
+            color: white;
+            min-height: 100vh;
+        }
+
+        header {
+            padding: 22px 40px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #38bdf8;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 12px #22c55e;
+        }
+
+        main {
+            max-width: 1200px;
+            margin: auto;
+            padding: 35px 25px;
+        }
+
+        .heading {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .heading h1 {
+            font-size: 34px;
+            margin-bottom: 8px;
+        }
+
+        .heading p {
+            color: #94a3b8;
+            margin: 0;
+        }
+
+        .camera-card {
+            background: #0b131d;
+            border: 1px solid rgba(56,189,248,0.18);
+            border-radius: 18px;
+            padding: 20px;
+
+            box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin: auto;
+            overflow: hidden;
+            border-radius: 14px;
+            background: black;
+        }
+
+        video {
+            width: 100%;
+            display: block;
+            transform: scaleX(-1);
+        }
+
+        canvas {
+            display: none;
+        }
+
+        .detection-box {
+            position: absolute;
+
+            width: 60%;
+            height: 60%;
+
+            left: 20%;
+            top: 20%;
+
+            border: 3px solid #38bdf8;
+            border-radius: 12px;
+
+            pointer-events: none;
+
+            box-shadow:
+                0 0 20px rgba(56,189,248,0.35);
+        }
+
+        .box-label {
+            position: absolute;
+
+            top: -30px;
+            left: 0;
+
+            background: #38bdf8;
+            color: #04111b;
+
+            padding: 6px 12px;
+
+            border-radius: 6px 6px 0 0;
+
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .result {
+            margin-top: 22px;
+
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+
+            gap: 15px;
+        }
+
+        .result-card {
+            background: #101c29;
+
+            border-radius: 12px;
+
+            padding: 20px;
+
+            text-align: center;
+
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .result-card span {
+            display: block;
+
+            color: #64748b;
+
+            font-size: 12px;
+
+            text-transform: uppercase;
+
+            margin-bottom: 8px;
+        }
+
+        .result-card strong {
+            font-size: 20px;
+            color: #e2e8f0;
+        }
+
+        .alert {
+            margin-top: 18px;
+
+            padding: 18px;
+
+            border-radius: 12px;
+
+            text-align: center;
+
+            font-weight: 700;
+
+            background: #0f1a24;
+
+            color: #94a3b8;
+        }
+
+        .alert.active {
+            background: rgba(239,68,68,0.15);
+
+            color: #f87171;
+
+            border: 1px solid rgba(239,68,68,0.35);
+        }
+
+        .instructions {
+            margin-top: 25px;
+
+            text-align: center;
+
+            color: #64748b;
+
+            font-size: 14px;
+        }
+
+        @media(max-width: 700px) {
+
+            .result {
+                grid-template-columns: 1fr;
+            }
+
+            header {
+                padding: 18px;
+            }
+
+            .heading h1 {
+                font-size: 27px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<header>
+
+    <div class="logo">
+        SMART SIGN
+    </div>
+
+    <div class="status">
+
+        <div class="dot"></div>
+
+        CAMERA SYSTEM READY
+
+    </div>
+
+</header>
+
+
+<main>
+
+
+    <div class="heading">
+
+        <h1>
+            AI Traffic Sign Recognition
+        </h1>
+
+        <p>
+            Real-time traffic sign recognition and driver alert system
+        </p>
+
+    </div>
+
+
+    <div class="camera-card">
+
+
+        <div class="camera-container">
+
+            <video
+                id="video"
+                autoplay
+                playsinline>
+            </video>
+
+            <canvas
+                id="canvas">
+            </canvas>
+
+
+            <div
+                class="detection-box"
+                id="detectionBox">
+
+                <div class="box-label">
+                    PLACE SIGN HERE
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="result">
+
+
+            <div class="result-card">
+
+                <span>
+                    Detected Sign
+                </span>
+
+                <strong id="sign">
+                    Waiting...
+                </strong>
+
+            </div>
+
+
+            <div class="result-card">
+
+                <span>
+                    Confidence
+                </span>
+
+                <strong id="confidence">
+                    --
+                </strong>
+
+            </div>
+
+
+            <div class="result-card">
+
+                <span>
+                    Class
+                </span>
+
+                <strong id="classId">
+                    --
+                </strong>
+
+            </div>
+
+
+        </div>
+
+
+        <div
+            class="alert"
+            id="alert">
+
+            Camera active — place a traffic sign
+            inside the blue box.
+
+        </div>
+
+
+        <div class="instructions">
+
+            Hold a traffic sign clearly inside
+            the blue detection area.
+
+        </div>
+
+
+    </div>
+
+
+</main>
+
+
+<script>
+
+
+const video =
+    document.getElementById("video");
+
+const canvas =
+    document.getElementById("canvas");
+
+const signElement =
+    document.getElementById("sign");
+
+const confidenceElement =
+    document.getElementById("confidence");
+
+const classElement =
+    document.getElementById("classId");
+
+const alertElement =
+    document.getElementById("alert");
+
+const detectionBox =
+    document.getElementById("detectionBox");
+
+
+let lastSign = "";
+
+let lastAudioTime = 0;
+
+
+// =====================================
+// START CAMERA
+// =====================================
+
+async function startCamera() {
+
+    try {
+
+        const stream =
+            await navigator.mediaDevices
+                .getUserMedia({
+
+                    video: {
+                        width: 1280,
+                        height: 720
+                    },
+
+                    audio: false
+
+                });
+
+        video.srcObject = stream;
+
+    }
+
+    catch(error) {
+
+        console.error(error);
+
+        alert(
+            "Camera permission is required."
+        );
+
+    }
+
+}
+
+
+// =====================================
+// SEND FRAME TO AI
+// =====================================
+
+async function detectSign() {
+
+    if (
+        video.videoWidth === 0 ||
+        video.videoHeight === 0
+    ) {
+
+        return;
+
+    }
+
+
+    canvas.width =
+        video.videoWidth;
+
+    canvas.height =
+        video.videoHeight;
+
+
+    const context =
+        canvas.getContext("2d");
+
+
+    context.drawImage(
+        video,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    canvas.toBlob(
+        async function(blob) {
+
+            const formData =
+                new FormData();
+
+            formData.append(
+                "frame",
+                blob,
+                "frame.jpg"
+            );
+
+
+            try {
+
+                const response =
+                    await fetch(
+                        "/predict",
+                        {
+                            method: "POST",
+                            body: formData
+                        }
+                    );
+
+
+                const data =
+                    await response.json();
+
+
+                if (data.detected) {
+
+                    signElement.textContent =
+                        data.sign;
+
+                    confidenceElement.textContent =
+                        data.confidence + "%";
+
+                    classElement.textContent =
+                        data.class_id;
+
+
+                    alertElement.textContent =
+                        "⚠ TRAFFIC SIGN DETECTED: "
+                        + data.sign;
+
+                    alertElement.classList.add(
+                        "active"
+                    );
+
+
+                    detectionBox.style.borderColor =
+                        "#ef4444";
+
+
+                    // Play voice alert
+
+                    const now =
+                        Date.now();
+
+
+                    if (
+                        data.sign !== lastSign ||
+                        now - lastAudioTime > 8000
+                    ) {
+
+                        if (data.audio) {
+
+                            const audio =
+                                new Audio(
+                                    data.audio
+                                );
+
+                            audio.play()
+                                .catch(
+                                    () => {}
+                                );
+
+                        }
+
+                        lastSign =
+                            data.sign;
+
+                        lastAudioTime =
+                            now;
+
+                    }
+
+                }
+
+                else {
+
+                    signElement.textContent =
+                        "Searching...";
+
+                    confidenceElement.textContent =
+                        "--";
+
+                    classElement.textContent =
+                        "--";
+
+                    alertElement.textContent =
+                        "Scanning for traffic sign...";
+
+                    alertElement.classList.remove(
+                        "active"
+                    );
+
+                    detectionBox.style.borderColor =
+                        "#38bdf8";
+
+                }
+
+            }
+
+            catch(error) {
+
+                console.error(
+                    "Prediction error:",
+                    error
+                );
+
+            }
+
+        },
+        "image/jpeg",
+        0.8
+    );
+
+}
+
+
+// =====================================
+// INITIALIZE
+// =====================================
+
+startCamera();
+
+
+// Run detection approximately every 800 ms
+
+setInterval(
+    detectSign,
+    800
+);
+
+
+</script>
+
+
+</body>
+
+</html>

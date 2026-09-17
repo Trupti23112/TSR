@@ -1,0 +1,7 @@
+﻿venv/
+__pycache__/
+*.pyc
+runs/
+yolo_dataset/
+yolo11n.pt
+.git/
