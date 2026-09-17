@@ -2,8 +2,11 @@
 <html lang="en">
 
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
 
     <title>Smart Sign | Traffic Sign Recognition</title>
 
@@ -344,8 +347,7 @@
             class="alert"
             id="alert">
 
-            Camera active — place a traffic sign
-            inside the blue box.
+            Starting camera...
 
         </div>
 
@@ -366,6 +368,10 @@
 
 <script>
 
+
+// =====================================
+// ELEMENTS
+// =====================================
 
 const video =
     document.getElementById("video");
@@ -389,9 +395,17 @@ const detectionBox =
     document.getElementById("detectionBox");
 
 
+// =====================================
+// STATE
+// =====================================
+
 let lastSign = "";
 
 let lastAudioTime = 0;
+
+let detecting = false;
+
+let detectionStarted = false;
 
 
 // =====================================
@@ -402,32 +416,130 @@ async function startCamera() {
 
     try {
 
-        const stream =
-            await navigator.mediaDevices
-                .getUserMedia({
+        console.log("Requesting camera...");
 
-                    video: {
-                        width: 1280,
-                        height: 720
+
+        const stream =
+            await navigator.mediaDevices.getUserMedia({
+
+                video: {
+                    width: {
+                        ideal: 1280
                     },
 
-                    audio: false
+                    height: {
+                        ideal: 720
+                    },
 
-                });
+                    facingMode: "user"
+                },
+
+                audio: false
+
+            });
+
 
         video.srcObject = stream;
+
+
+        await video.play();
+
+
+        console.log("Camera started");
+
+
+        alertElement.textContent =
+            "Camera active — scanning for traffic signs...";
+
+
+        // Wait until video dimensions are available
+
+        waitForVideo();
 
     }
 
     catch(error) {
 
-        console.error(error);
+        console.error(
+            "Camera error:",
+            error
+        );
 
-        alert(
-            "Camera permission is required."
+
+        signElement.textContent =
+            "Camera Error";
+
+
+        confidenceElement.textContent =
+            "--";
+
+
+        classElement.textContent =
+            "--";
+
+
+        alertElement.textContent =
+            "⚠ Camera permission is required.";
+
+
+        alertElement.classList.add(
+            "active"
         );
 
     }
+
+}
+
+
+// =====================================
+// WAIT FOR VIDEO
+// =====================================
+
+function waitForVideo() {
+
+    if (
+        video.readyState >= 2 &&
+        video.videoWidth > 0 &&
+        video.videoHeight > 0
+    ) {
+
+        console.log(
+            "Video ready:",
+            video.videoWidth,
+            "x",
+            video.videoHeight
+        );
+
+
+        if (!detectionStarted) {
+
+            detectionStarted = true;
+
+
+            // Start detection
+
+            setInterval(
+                detectSign,
+                1000
+            );
+
+        }
+
+
+        return;
+
+    }
+
+
+    console.log(
+        "Waiting for video..."
+    );
+
+
+    setTimeout(
+        waitForVideo,
+        300
+    );
 
 }
 
@@ -437,6 +549,18 @@ async function startCamera() {
 // =====================================
 
 async function detectSign() {
+
+
+    // Prevent overlapping requests
+
+    if (detecting) {
+
+        return;
+
+    }
+
+
+    // Make sure video is ready
 
     if (
         video.videoWidth === 0 ||
@@ -448,153 +572,332 @@ async function detectSign() {
     }
 
 
-    canvas.width =
-        video.videoWidth;
-
-    canvas.height =
-        video.videoHeight;
+    detecting = true;
 
 
-    const context =
-        canvas.getContext("2d");
+    try {
 
 
-    context.drawImage(
-        video,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
+        // =================================
+        // PREPARE CANVAS
+        // =================================
+
+        canvas.width =
+            video.videoWidth;
+
+        canvas.height =
+            video.videoHeight;
 
 
-    canvas.toBlob(
-        async function(blob) {
+        const context =
+            canvas.getContext("2d");
 
-            const formData =
-                new FormData();
 
-            formData.append(
-                "frame",
-                blob,
-                "frame.jpg"
+        context.drawImage(
+
+            video,
+
+            0,
+            0,
+
+            canvas.width,
+            canvas.height
+
+        );
+
+
+        // =================================
+        // CREATE IMAGE
+        // =================================
+
+        const blob =
+            await new Promise(
+                (resolve, reject) => {
+
+                    canvas.toBlob(
+
+                        function(result) {
+
+                            if (result) {
+
+                                resolve(result);
+
+                            }
+
+                            else {
+
+                                reject(
+                                    new Error(
+                                        "Could not create image blob"
+                                    )
+                                );
+
+                            }
+
+                        },
+
+                        "image/jpeg",
+
+                        0.75
+
+                    );
+
+                }
             );
 
 
-            try {
+        // =================================
+        // FORM DATA
+        // =================================
 
-                const response =
-                    await fetch(
-                        "/predict",
-                        {
-                            method: "POST",
-                            body: formData
-                        }
-                    );
+        const formData =
+            new FormData();
 
 
-                const data =
-                    await response.json();
+        formData.append(
+
+            "frame",
+
+            blob,
+
+            "frame.jpg"
+
+        );
 
 
-                if (data.detected) {
-
-                    signElement.textContent =
-                        data.sign;
-
-                    confidenceElement.textContent =
-                        data.confidence + "%";
-
-                    classElement.textContent =
-                        data.class_id;
+        console.log(
+            "Sending frame to /predict..."
+        );
 
 
-                    alertElement.textContent =
-                        "⚠ TRAFFIC SIGN DETECTED: "
-                        + data.sign;
+        // =================================
+        // SEND TO FLASK
+        // =================================
 
-                    alertElement.classList.add(
-                        "active"
-                    );
+        const response =
+            await fetch(
 
+                "/predict",
 
-                    detectionBox.style.borderColor =
-                        "#ef4444";
+                {
 
+                    method: "POST",
 
-                    // Play voice alert
-
-                    const now =
-                        Date.now();
-
-
-                    if (
-                        data.sign !== lastSign ||
-                        now - lastAudioTime > 8000
-                    ) {
-
-                        if (data.audio) {
-
-                            const audio =
-                                new Audio(
-                                    data.audio
-                                );
-
-                            audio.play()
-                                .catch(
-                                    () => {}
-                                );
-
-                        }
-
-                        lastSign =
-                            data.sign;
-
-                        lastAudioTime =
-                            now;
-
-                    }
+                    body: formData
 
                 }
 
-                else {
+            );
 
-                    signElement.textContent =
-                        "Searching...";
 
-                    confidenceElement.textContent =
-                        "--";
+        console.log(
+            "Prediction response:",
+            response.status
+        );
 
-                    classElement.textContent =
-                        "--";
 
-                    alertElement.textContent =
-                        "Scanning for traffic sign...";
+        // =================================
+        // CHECK SERVER RESPONSE
+        // =================================
 
-                    alertElement.classList.remove(
-                        "active"
-                    );
+        if (!response.ok) {
 
-                    detectionBox.style.borderColor =
-                        "#38bdf8";
+            throw new Error(
+
+                "Server returned HTTP " +
+                response.status
+
+            );
+
+        }
+
+
+        // =================================
+        // READ JSON
+        // =================================
+
+        const data =
+            await response.json();
+
+
+        console.log(
+            "Prediction:",
+            data
+        );
+
+
+        // =================================
+        // SIGN DETECTED
+        // =================================
+
+        if (data.detected) {
+
+
+            signElement.textContent =
+                data.sign;
+
+
+            confidenceElement.textContent =
+                data.confidence + "%";
+
+
+            classElement.textContent =
+                data.class_id;
+
+
+            alertElement.textContent =
+                "⚠ TRAFFIC SIGN DETECTED: " +
+                data.sign;
+
+
+            alertElement.classList.add(
+                "active"
+            );
+
+
+            detectionBox.style.borderColor =
+                "#ef4444";
+
+
+            // =================================
+            // VOICE ALERT
+            // =================================
+
+            const now =
+                Date.now();
+
+
+            if (
+
+                data.sign !== lastSign ||
+
+                now - lastAudioTime > 8000
+
+            ) {
+
+
+                if (data.audio) {
+
+
+                    const audio =
+                        new Audio(
+                            data.audio
+                        );
+
+
+                    audio.play()
+
+                        .then(() => {
+
+                            console.log(
+                                "Voice alert played"
+                            );
+
+                        })
+
+                        .catch(error => {
+
+                            console.log(
+                                "Audio playback blocked:",
+                                error
+                            );
+
+                        });
 
                 }
 
+
+                lastSign =
+                    data.sign;
+
+
+                lastAudioTime =
+                    now;
+
             }
 
-            catch(error) {
+        }
 
-                console.error(
-                    "Prediction error:",
-                    error
-                );
 
-            }
+        // =================================
+        // NO SIGN DETECTED
+        // =================================
 
-        },
-        "image/jpeg",
-        0.8
-    );
+        else {
+
+
+            signElement.textContent =
+                "Searching...";
+
+
+            confidenceElement.textContent =
+                "--";
+
+
+            classElement.textContent =
+                "--";
+
+
+            alertElement.textContent =
+                "Scanning for traffic sign...";
+
+
+            alertElement.classList.remove(
+                "active"
+            );
+
+
+            detectionBox.style.borderColor =
+                "#38bdf8";
+
+        }
+
+
+    }
+
+
+    // =====================================
+    // ERROR
+    // =====================================
+
+    catch(error) {
+
+
+        console.error(
+            "Prediction error:",
+            error
+        );
+
+
+        signElement.textContent =
+            "Connection Error";
+
+
+        confidenceElement.textContent =
+            "--";
+
+
+        classElement.textContent =
+            "--";
+
+
+        alertElement.textContent =
+            "⚠ AI server connection error";
+
+
+        alertElement.classList.add(
+            "active"
+        );
+
+
+    }
+
+
+    finally {
+
+        detecting = false;
+
+    }
 
 }
 
@@ -604,14 +907,6 @@ async function detectSign() {
 // =====================================
 
 startCamera();
-
-
-// Run detection approximately every 800 ms
-
-setInterval(
-    detectSign,
-    800
-);
 
 
 </script>
